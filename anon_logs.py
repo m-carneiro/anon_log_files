@@ -36,7 +36,7 @@ def compare(value, list):
       return True
   return False
 
-
+# TODO(keep evaluating to identifying secrets)
 def get_secret_in_logs():
   i = 0
   try:
