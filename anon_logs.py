@@ -61,8 +61,12 @@ def get_secret_in_logs():
           if compare(':', item) or compare('=', item):
             item = item.split(':')
             for i in item:
+              
+              # TODO - Adicionar mais validações para pegar todos os tipos de secret
               if compare(i, secret_types):
                 print(f'Found: {i}')
+                
+              # Valida o UUID e adiciona na lista de achados
               else:
                 i = i.removesuffix('\n')
                 i = i.removeprefix(' ')
