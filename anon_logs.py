@@ -3,6 +3,7 @@ import glob
 import re
 import os
 import time
+import uuid
 
 secret_types = [
     "accessKey", "access_key", "access-key", "AccessKey", "AccessToken", "accessToken", "access_token", "access-token",
@@ -12,6 +13,7 @@ secret_types = [
 
 retry_list = []
 findings_list = []
+unique_secrets = []
 
 
 def read_csv():
@@ -22,12 +24,20 @@ def read_csv():
         return f.readlines()
 
 
-def isBase64(s):
+def is_base_64(s):
   try:
     decoded = base64.b64decode(s, validate=True)
     return base64.b64encode(decoded).decode('ascii') == s.strip()
   except Exception:
     return False
+  
+  
+def is_valid_uuid(uuid_to_test, version=4):
+    try:
+        _ = uuid.UUID(uuid_to_test, version=version)
+    except ValueError:
+        return False
+    return True
 
 
 def compare(value, list):
@@ -36,25 +46,31 @@ def compare(value, list):
       return True
   return False
 
-# TODO(keep evaluating to identifying secrets)
+
 def get_secret_in_logs():
   i = 0
   try:
     logs = read_csv()
-    del logs[0]
-    
     for log in logs:
       log = log.split(',')
-      for value in log:
-        value = value.split('\n')
-        for i, info in value:
-          if info == '':
-            del value[i]
-        
-        print(value)
-
-      
-      
+      for item in log:
+        check = compare(item, secret_types)
+        if check:
+          print(f'Found: {item}')
+        else:
+          if compare(':', item) or compare('=', item):
+            item = item.split(':')
+            for i in item:
+              if compare(i, secret_types):
+                print(f'Found: {i}')
+              else:
+                i = i.removesuffix('\n')
+                i = i.removeprefix(' ')
+                if is_valid_uuid(i):
+                  print(f'Valid UUID: {i}')
+                  if i not in unique_secrets:
+                    unique_secrets.append(i)
+                    
   except Exception as e:
     print(f'Err : {e}')     
 
