@@ -1,4 +1,5 @@
 import base64
+from collections import defaultdict
 import glob
 import re
 import os
@@ -144,15 +145,32 @@ def classify_secrets(secrets: list[str]):
       del secrets[secrets.index(secret)]
 
 
-def clean_list(list: list[str]):
-  list = [x for x in list if x != '']
-  for item in list:
+def clean_list(items: list[str]):
+  items = [x for x in items if x != '']
+  for item in items:
     if ":" in item:
       item = item.split(':')
-      if item not in list:
-        list.append(item)
+      if item not in items:
+        items.append(item)
+
+  def normalize(item):
+    if isinstance(item, list):
+        return tuple(item)
+    return item 
+
+  duplicates = defaultdict(list)
+
+  for idx, item in enumerate(items):
+      normalized = normalize(item)
+      duplicates[normalized].append(idx)
+
+  duplicate_items = {item: indices for item, indices in duplicates.items() if len(indices) > 1}
+
+  for item, indices in duplicate_items.items():
+      del indices[1]
+      print(f"Duplicate: {item} found at indices: {indices}")
   
-  return list
+  return items
     
 
 
