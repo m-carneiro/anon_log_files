@@ -75,7 +75,7 @@ def first_log_part(secret_type: str) -> str:
         response = random.choice([200, 201, 202, 204, 400, 401, 403, 404, 500])
         username = random.choice(owners)
         
-        return f" REST https://{websites}/{team_name}/{login} - {response} || {username} - {create_secrets(secret_type)}"
+        return f" REST https://{websites}/{team_name}/{login} - {response} || username:{username} - password:{create_secrets(secret_type)}"
     elif secret_type == "auth_token" or secret_type == "authToken" or secret_type == "auth-token" or secret_type == "AuthToken" or secret_type == "auth_key" or secret_type == "AuthKey" or secret_type == "authKey" or secret_type ==  "auth-key": 
         response = random.choice([200, 201, 202, 204, 400, 401, 403, 404, 500])
         websites = random.choice(["quantumsurf.io", "bytenest.com", "nexasphere.net", "pixelforge.tech", "codepulse.dev", "cloudvoyage.org", "datawave.io", "hyperldinker.net"])

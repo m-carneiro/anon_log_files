@@ -24,14 +24,50 @@ def read_csv():
         return f.readlines()
 
 
-def is_base_64(s):
-  try:
-    decoded = base64.b64decode(s, validate=True)
-    return base64.b64encode(decoded).decode('ascii') == s.strip()
-  except Exception:
-    return False
-  
-  
+def splitter(string, maxsplit=0):
+    delimiters = " ", "-", "_", ":", "="
+    regex_pattern = '|'.join(map(re.escape, delimiters))
+    return re.split(regex_pattern, string, maxsplit)
+
+
+def sanitize(value):
+  value = value.lower()
+  value = value.replace('\n', '')
+  value = value.replace('"', '')
+  return value
+
+
+def is_base64(s):
+    if len(s) % 4 != 0:
+        return False
+    
+    base64_pattern = re.compile(r'^[A-Za-z0-9+/]*={0,2}$')
+    if not base64_pattern.match(s):
+        return False
+    
+    try:
+        base64.b64decode(s, validate=True)
+        return True
+    except Exception:
+        return False
+
+
+def is_jwt(token):
+    if not re.match(r'^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$', token):
+        return False
+    
+    header, payload, signature = token.split('.')
+    
+    def is_base64(encoded_str):
+        try:
+            padding = '=' * (-len(encoded_str) % 4)
+            base64.urlsafe_b64decode(encoded_str + padding)
+            return True
+        except (base64.binascii.Error, ValueError):
+            return False
+    return is_base64(header) and is_base64(payload) and is_base64(signature)
+
+
 def is_valid_uuid(uuid_to_test, version=4):
     try:
         _ = uuid.UUID(uuid_to_test, version=version)
@@ -47,8 +83,8 @@ def compare(value, list):
   return False
 
 
-def get_secret_in_logs():
-  i = 0
+def get_secret_in_logs() -> list[str]:
+  secrets = []
   try:
     logs = read_csv()
     for log in logs:
@@ -56,48 +92,86 @@ def get_secret_in_logs():
       for item in log:
         check = compare(item, secret_types)
         if check:
-          print(f'Found: {item}')
+          new = item.split(' ')
+          for k in new:
+            l = k.split('\n')
+            for m in l:
+              if m == '-' or m == '' or m == '||' or m == ' ' or m == '\n':
+                del l[l.index(m)]
+              else:
+                secrets.append(m)
         else:
           if compare(':', item) or compare('=', item):
             item = item.split(':')
-            for i in item:
-              
-              # TODO - Adicionar mais validações para pegar todos os tipos de secret
+            for i in item:       
+              i = i.removesuffix('\n')
+              i = i.removeprefix(' ')
               if compare(i, secret_types):
-                print(f'Found: {i}')
-                
-              # Valida o UUID e adiciona na lista de achados
+                i = i.split(' ')
+                for j in i:
+                  if compare(j, secret_types):
+                    findings_list.append(j)
+                  else:
+                    retry_list.append(j)
+              elif is_valid_uuid(i):
+                if i not in unique_secrets:
+                  unique_secrets.append(i)
               else:
-                i = i.removesuffix('\n')
-                i = i.removeprefix(' ')
-                if is_valid_uuid(i):
-                  print(f'Valid UUID: {i}')
-                  if i not in unique_secrets:
-                    unique_secrets.append(i)
-                    
+                retry_list.append(i)
+    return secrets                
   except Exception as e:
-    print(f'Err : {e}')     
+    print(f'Err : {e.args}')     
 
 
-def sanitize(value):
-  value = value.lower()
-  value = value.replace('\n', '')
-  value = value.replace('"', '')
-  return value
+def classify_secrets(secrets: list[str]):
+  for secret in secrets:
+    items = secret.split(':')
+    for i in items:
+      if is_base64(i) and i != 'REST':
+        if i not in findings_list:
+          findings_list.append(i)
+      elif is_valid_uuid(i):
+        if i not in unique_secrets:
+          unique_secrets.append(i)
+    if is_jwt(secret):
+        findings_list.append(secret)
+    elif compare(secret, secret_types):
+      if secret == 'Bearer' or secret == 'bearer':
+        retry_list.append(secret)
+      else:
+        findings_list.append(secret)
+    else:
+      del secrets[secrets.index(secret)]
 
-def splitter(string, maxsplit=0):
-    delimiters = " ", "-", "_", ":", "="
-    regex_pattern = '|'.join(map(re.escape, delimiters))
-    return re.split(regex_pattern, string, maxsplit)
+
+def clean_list(list: list[str]):
+  list = [x for x in list if x != '']
+  for item in list:
+    if ":" in item:
+      item = item.split(':')
+      if item not in list:
+        list.append(item)
+  
+  return list
+    
 
 
 def main():
-  print('Initializing... \n\n')
-  get_secret_in_logs()
+  print('Initializing... \n')
+  secrets = get_secret_in_logs()
+
+  classify_secrets(secrets)
+  findings_list.extend(unique_secrets)
+  
+  print('\n')
+  print(f'Unique secrets size: {len(unique_secrets)}')
+  print(f'Findings size: {len(findings_list)}')
+  print(f'Retry list size: {len(retry_list)} \n')
   
   time.sleep(5)
   
-  print('Findings: \n')
-  print(findings_list)
+  print('Findings:')
+  print(clean_list(findings_list))
+
 
 main()
